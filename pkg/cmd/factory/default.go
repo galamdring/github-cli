@@ -32,11 +32,11 @@ func New(appVersion string, invokingAgent string, cfgFunc func() (gh.Config, err
 	}
 
 	f.IOStreams = ios
-	f.HttpClient = HttpClientFunc(cfgFunc, ios, appVersion, invokingAgent, telemetryDisabler)
-	f.PlainHttpClient = plainHttpClientFunc(ios, appVersion, invokingAgent, telemetryDisabler)
-	f.ExternalHttpClient = externalHttpClientFunc(ios, appVersion)
 	f.GitClient = newGitClient(f) // Depends on IOStreams, and Executable
 	f.Remotes = remotesFunc(f)    // Depends on Config, and GitClient
+	f.HttpClient = HttpClientFunc(cfgFunc, ios, appVersion, invokingAgent, telemetryDisabler, f.Remotes)
+	f.PlainHttpClient = plainHttpClientFunc(ios, appVersion, invokingAgent, telemetryDisabler)
+	f.ExternalHttpClient = externalHttpClientFunc(ios, appVersion)
 	f.BaseRepo = BaseRepoFunc(f.Remotes)
 	f.Prompter = newPrompter(f)              // Depends on Config and IOStreams
 	f.Browser = newBrowser(f)                // Depends on Config, and IOStreams
@@ -185,14 +185,23 @@ func remotesFunc(f *cmdutil.Factory) func() (ghContext.Remotes, error) {
 	return rr.Resolver()
 }
 
-func HttpClientFunc(cfgFunc func() (gh.Config, error), ios *iostreams.IOStreams, appVersion string, invokingAgent string, telemetryDisabler ghtelemetry.Disabler) func() (*http.Client, error) {
+func HttpClientFunc(cfgFunc func() (gh.Config, error), ios *iostreams.IOStreams, appVersion string, invokingAgent string, telemetryDisabler ghtelemetry.Disabler, remotesFunc func() (ghContext.Remotes, error)) func() (*http.Client, error) {
 	return func() (*http.Client, error) {
 		cfg, err := cfgFunc()
 		if err != nil {
 			return nil, err
 		}
+		authCfg := cfg.Authentication()
+
+		// If we can resolve the current repo's owner, set it on the auth config so
+		// that ActiveToken will prefer the token mapped to that owner over the
+		// globally active user.
+		if remotes, err := remotesFunc(); err == nil && len(remotes) > 0 {
+			authCfg.SetRepoOwner(remotes[0].RepoOwner())
+		}
+
 		opts := api.HTTPClientOptions{
-			Config:            cfg.Authentication(),
+			Config:            authCfg,
 			Log:               ios.ErrOut,
 			LogColorize:       ios.ColorEnabled(),
 			AppVersion:        appVersion,
