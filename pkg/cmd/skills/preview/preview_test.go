@@ -403,7 +403,7 @@ func TestPreviewRun_UnsupportedHost(t *testing.T) {
 		repo:       ghrepo.NewWithHost("github", "awesome-copilot", "acme.ghes.com"),
 		Telemetry:  &telemetry.NoOpService{},
 	})
-	require.ErrorContains(t, err, "supports only github.com")
+	require.ErrorContains(t, err, "does not currently support GitHub Enterprise Server")
 }
 
 func TestPreviewRun_Interactive(t *testing.T) {

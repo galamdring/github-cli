@@ -1177,7 +1177,7 @@ func TestInstallRun(t *testing.T) {
 					SkillName:   "git-commit",
 				}
 			},
-			wantErr: "supports only github.com",
+			wantErr: "does not currently support GitHub Enterprise Server",
 		},
 		{
 			name:  "select all skills in interactive prompt",
