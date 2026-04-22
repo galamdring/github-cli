@@ -1180,10 +1180,9 @@ func kiroResourcePath(installDir, gitRoot string) string {
 	return filepath.ToSlash(installDir)
 }
 
-// filterHiddenDirSkills separates hidden-dir skills from the full list and
-// applies the --allow-hidden-dirs flag logic. When the flag is set, all skills
-// are returned and a warning is printed. When the flag is not set, hidden-dir
-// skills are excluded and an error is returned if no standard skills remain.
+// filterHiddenDirSkills applies the --allow-hidden-dirs flag logic. When the
+// flag is set, all skills are returned with a warning. Otherwise, hidden-dir
+// skills are excluded with an error if no standard skills remain.
 func filterHiddenDirSkills(opts *InstallOptions, allSkills []discovery.Skill) ([]discovery.Skill, error) {
 	cs := opts.IO.ColorScheme()
 
@@ -1198,25 +1197,16 @@ func filterHiddenDirSkills(opts *InstallOptions, allSkills []discovery.Skill) ([
 		return allSkills, nil
 	}
 
-	var standard []discovery.Skill
-	var hiddenCount int
-	for _, s := range allSkills {
-		if s.IsHiddenDirConvention() {
-			hiddenCount++
-		} else {
-			standard = append(standard, s)
-		}
-	}
-
-	if len(standard) == 0 && hiddenCount > 0 {
+	r := discovery.PartitionHiddenDirSkills(allSkills)
+	if len(r.Standard) == 0 && r.HiddenCount > 0 {
 		return nil, fmt.Errorf(
 			"no standard skills found, but %d skill(s) exist in hidden directories\n"+
 				"  Use --allow-hidden-dirs to include them",
-			hiddenCount,
+			r.HiddenCount,
 		)
 	}
 
-	return standard, nil
+	return r.Standard, nil
 }
 
 // checkUpstreamProvenance fetches the skill's SKILL.md via the contents API
