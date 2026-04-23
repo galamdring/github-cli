@@ -2141,11 +2141,12 @@ func Test_isSkillPath(t *testing.T) {
 
 func Test_printReviewHint(t *testing.T) {
 	tests := []struct {
-		name       string
-		repo       string
-		sha        string
-		skillNames []string
-		wantOutput string
+		name            string
+		repo            string
+		sha             string
+		skillNames      []string
+		allowHiddenDirs bool
+		wantOutput      string
 	}{
 		{
 			name:       "remote install with SHA includes SHA in preview command",
@@ -2182,6 +2183,22 @@ func Test_printReviewHint(t *testing.T) {
 			skillNames: []string{},
 			wantOutput: "",
 		},
+		{
+			name:            "allow-hidden-dirs appends flag to preview command",
+			repo:            "owner/repo",
+			sha:             "abc123",
+			skillNames:      []string{"hidden-skill"},
+			allowHiddenDirs: true,
+			wantOutput:      "gh skill preview owner/repo hidden-skill@abc123 --allow-hidden-dirs",
+		},
+		{
+			name:            "allow-hidden-dirs without SHA",
+			repo:            "owner/repo",
+			sha:             "",
+			skillNames:      []string{"hidden-skill"},
+			allowHiddenDirs: true,
+			wantOutput:      "gh skill preview owner/repo hidden-skill --allow-hidden-dirs",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2189,7 +2206,7 @@ func Test_printReviewHint(t *testing.T) {
 			ios, _, _, _ := iostreams.Test()
 			cs := ios.ColorScheme()
 			var buf strings.Builder
-			printReviewHint(&buf, cs, tt.repo, tt.sha, tt.skillNames)
+			printReviewHint(&buf, cs, tt.repo, tt.sha, tt.skillNames, tt.allowHiddenDirs)
 			if tt.wantOutput == "" {
 				assert.Empty(t, buf.String())
 			} else {

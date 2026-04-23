@@ -391,7 +391,7 @@ func installRun(opts *InstallOptions) error {
 			}
 
 			printFileTree(opts.IO.ErrOut, cs, result.Dir, result.Installed)
-			printReviewHint(opts.IO.ErrOut, cs, repoSource, resolved.SHA, result.Installed)
+			printReviewHint(opts.IO.ErrOut, cs, repoSource, resolved.SHA, result.Installed, opts.AllowHiddenDirs)
 			printHostHints(opts.IO.ErrOut, cs, plan.hosts, result.Installed, result.Dir, gitRoot)
 		}
 
@@ -536,7 +536,7 @@ func runLocalInstall(opts *InstallOptions) error {
 		}
 
 		printFileTree(opts.IO.ErrOut, cs, result.Dir, result.Installed)
-		printReviewHint(opts.IO.ErrOut, cs, "", "", result.Installed)
+		printReviewHint(opts.IO.ErrOut, cs, "", "", result.Installed, false)
 		printHostHints(opts.IO.ErrOut, cs, plan.hosts, result.Installed, result.Dir, gitRoot)
 	}
 
@@ -1118,8 +1118,10 @@ func printPreInstallDisclaimer(w io.Writer, cs *iostreams.ColorScheme) {
 
 // printReviewHint warns the user to review installed skills and suggests preview commands.
 // When sha is non-empty the suggested commands include @SHA so the user previews
-// exactly the version that was installed.
-func printReviewHint(w io.Writer, cs *iostreams.ColorScheme, repo, sha string, skillNames []string) {
+// exactly the version that was installed. When allowHiddenDirs is true, the
+// suggested commands include --allow-hidden-dirs so previewing hidden-dir
+// skills works without an extra manual step.
+func printReviewHint(w io.Writer, cs *iostreams.ColorScheme, repo, sha string, skillNames []string, allowHiddenDirs bool) {
 	if len(skillNames) == 0 {
 		return
 	}
@@ -1130,11 +1132,15 @@ func printReviewHint(w io.Writer, cs *iostreams.ColorScheme, repo, sha string, s
 	}
 	fmt.Fprintln(w, "  Review installed content before use:")
 	fmt.Fprintln(w)
+	hiddenFlag := ""
+	if allowHiddenDirs {
+		hiddenFlag = " --allow-hidden-dirs"
+	}
 	for _, name := range skillNames {
 		if sha != "" {
-			fmt.Fprintf(w, "    gh skill preview %s %s@%s\n", repo, name, sha)
+			fmt.Fprintf(w, "    gh skill preview %s %s@%s%s\n", repo, name, sha, hiddenFlag)
 		} else {
-			fmt.Fprintf(w, "    gh skill preview %s %s\n", repo, name)
+			fmt.Fprintf(w, "    gh skill preview %s %s%s\n", repo, name, hiddenFlag)
 		}
 	}
 	fmt.Fprintln(w)
