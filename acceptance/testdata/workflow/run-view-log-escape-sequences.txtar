@@ -1,4 +1,4 @@
-# This test ensure that a malicious workflow which emit terminal control sequences (ESC, OSC, CSI) in
+# This test ensures that a malicious workflow which emit terminal control sequences (ESC, OSC, CSI) in
 # its log output does not result in terminal injection when logs are displayed using `gh run view --log`
 
 # Use gh as a credential helper
