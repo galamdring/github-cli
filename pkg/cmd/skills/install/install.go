@@ -971,7 +971,7 @@ func truncateDescription(s string, maxWidth int) string {
 func checkOverwrite(opts *InstallOptions, skills []discovery.Skill, targetDir string, canPrompt bool) ([]discovery.Skill, error) {
 	var existing, fresh []discovery.Skill
 	for _, s := range skills {
-		dir := filepath.Join(targetDir, filepath.FromSlash(s.InstallName()))
+		dir := filepath.Join(targetDir, s.Name)
 		if _, err := os.Stat(dir); err == nil {
 			existing = append(existing, s)
 		} else {
@@ -1013,7 +1013,7 @@ func checkOverwrite(opts *InstallOptions, skills []discovery.Skill, targetDir st
 }
 
 func existingSkillPrompt(targetDir string, incoming discovery.Skill) string {
-	skillFile := filepath.Join(targetDir, filepath.FromSlash(incoming.InstallName()), "SKILL.md")
+	skillFile := filepath.Join(targetDir, incoming.Name, "SKILL.md")
 	data, err := os.ReadFile(skillFile)
 	if err != nil {
 		return fmt.Sprintf("Skill %q already exists. Overwrite?", incoming.DisplayName())

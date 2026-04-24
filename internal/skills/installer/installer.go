@@ -178,7 +178,10 @@ func InstallLocal(opts *LocalOptions) (*Result, error) {
 }
 
 func installLocalSkill(sourceRoot string, skill discovery.Skill, baseDir string) error {
-	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.InstallName()))
+	// Use skill.Name (not InstallName) so skills are always installed flat.
+	// Most agent clients only discover immediate subdirectories of their
+	// skills folder and do not find skills nested under namespace directories.
+	skillDir := filepath.Join(baseDir, skill.Name)
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return fmt.Errorf("could not create directory %s: %w", skillDir, err)
 	}
@@ -246,7 +249,8 @@ func installLocalSkill(sourceRoot string, skill discovery.Skill, baseDir string)
 }
 
 func installSkill(opts *Options, skill discovery.Skill, baseDir string) error {
-	skillDir := filepath.Join(baseDir, filepath.FromSlash(skill.InstallName()))
+	// Use skill.Name (not InstallName) for a flat directory layout.
+	skillDir := filepath.Join(baseDir, skill.Name)
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return fmt.Errorf("could not create directory %s: %w", skillDir, err)
 	}
