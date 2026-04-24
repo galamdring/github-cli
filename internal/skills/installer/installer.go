@@ -76,7 +76,7 @@ func Install(opts *Options) (*Result, error) {
 			return nil, fmt.Errorf("failed to install skill %q: %w", skill.InstallName(), err)
 		}
 		var warnings []string
-		if err := lockfile.RecordInstall(skill.InstallName(), opts.Owner, opts.Repo, skill.Path+"/SKILL.md", skill.TreeSHA, opts.PinnedRef); err != nil {
+		if err := lockfile.RecordInstall(opts.Host, skill.InstallName(), opts.Owner, opts.Repo, skill.Path+"/SKILL.md", skill.TreeSHA, opts.PinnedRef); err != nil {
 			warnings = append(warnings, fmt.Sprintf("could not record install for %s: %v", skill.InstallName(), err))
 		}
 		return &Result{Installed: []string{skill.InstallName()}, Dir: targetDir, Warnings: warnings}, nil
@@ -129,7 +129,7 @@ func Install(opts *Options) (*Result, error) {
 		}
 		installed = append(installed, r.name)
 		skill := opts.Skills[i]
-		if err := lockfile.RecordInstall(skill.InstallName(), opts.Owner, opts.Repo, skill.Path+"/SKILL.md", skill.TreeSHA, opts.PinnedRef); err != nil {
+		if err := lockfile.RecordInstall(opts.Host, skill.InstallName(), opts.Owner, opts.Repo, skill.Path+"/SKILL.md", skill.TreeSHA, opts.PinnedRef); err != nil {
 			warnings = append(warnings, fmt.Sprintf("could not record install for %s: %v", skill.InstallName(), err))
 		}
 	}
