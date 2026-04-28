@@ -1,0 +1,67 @@
+name: Rebase on upstream and release
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebase-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream and rebase
+        run: |
+          git remote add upstream https://github.com/cli/cli.git
+          git fetch upstream trunk --tags
+          git rebase upstream/trunk
+
+      - name: Push rebased branch
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/galamdring/github-cli.git
+          git push --force-with-lease origin HEAD
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build multi-platform
+        run: |
+          GH_VERSION=$(git describe --tags 2>/dev/null || echo "v0.0.0-unknown")
+          LDFLAGS="-X github.com/cli/cli/v2/internal/build.Version=$GH_VERSION -X github.com/cli/cli/v2/internal/build.Date=$(date +%Y-%m-%d)"
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-linux-amd64 ./cmd/gh
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-arm64 ./cmd/gh
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-amd64 ./cmd/gh
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-windows-amd64.exe ./cmd/gh
+
+      - name: Determine version tag
+        id: version
+        run: |
+          TAG=$(git describe --tags 2>/dev/null || echo "v0.0.0-unknown")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: |
+            bin/gh-linux-amd64
+            bin/gh-darwin-arm64
+            bin/gh-darwin-amd64
+            bin/gh-windows-amd64.exe
+          generate_release_notes: true
