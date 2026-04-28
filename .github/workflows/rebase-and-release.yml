@@ -26,7 +26,7 @@ jobs:
       - name: Add upstream and rebase
         run: |
           git remote add upstream https://github.com/cli/cli.git
-          git fetch upstream trunk
+          git fetch upstream trunk --tags
           git rebase upstream/trunk
 
       - name: Push rebased branch
@@ -41,7 +41,7 @@ jobs:
 
       - name: Build multi-platform
         run: |
-          GH_VERSION=$(git describe --tags --abbrev=0 upstream/trunk 2>/dev/null || echo "v0.0.0")-fork
+          GH_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")-fork
           LDFLAGS="-X github.com/cli/cli/v2/internal/build.Version=$GH_VERSION -X github.com/cli/cli/v2/internal/build.Date=$(date +%Y-%m-%d)"
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-linux-amd64 ./cmd/gh
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-arm64 ./cmd/gh
@@ -51,7 +51,7 @@ jobs:
       - name: Determine version tag
         id: version
         run: |
-          UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/trunk 2>/dev/null || echo "v0.0.0")
+          UPSTREAM_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           TAG="${UPSTREAM_TAG}-fork.$(date +%Y%m%d)"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
