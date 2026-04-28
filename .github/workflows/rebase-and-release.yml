@@ -41,10 +41,12 @@ jobs:
 
       - name: Build multi-platform
         run: |
-          GOOS=linux GOARCH=amd64 go run script/build.go -o bin/gh-linux-amd64
-          GOOS=darwin GOARCH=arm64 go run script/build.go -o bin/gh-darwin-arm64
-          GOOS=darwin GOARCH=amd64 go run script/build.go -o bin/gh-darwin-amd64
-          GOOS=windows GOARCH=amd64 go run script/build.go -o bin/gh-windows-amd64.exe
+          GH_VERSION=$(git describe --tags --abbrev=0 upstream/trunk 2>/dev/null || echo "v0.0.0")-fork
+          LDFLAGS="-X github.com/cli/cli/v2/internal/build.Version=$GH_VERSION -X github.com/cli/cli/v2/internal/build.Date=$(date +%Y-%m-%d)"
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-linux-amd64 ./cmd/gh
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-arm64 ./cmd/gh
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-amd64 ./cmd/gh
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-windows-amd64.exe ./cmd/gh
 
       - name: Determine version tag
         id: version
