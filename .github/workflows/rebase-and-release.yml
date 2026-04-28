@@ -41,7 +41,7 @@ jobs:
 
       - name: Build multi-platform
         run: |
-          GH_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")-fork
+          GH_VERSION=$(git describe --tags 2>/dev/null || echo "v0.0.0-unknown")
           LDFLAGS="-X github.com/cli/cli/v2/internal/build.Version=$GH_VERSION -X github.com/cli/cli/v2/internal/build.Date=$(date +%Y-%m-%d)"
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-linux-amd64 ./cmd/gh
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o bin/gh-darwin-arm64 ./cmd/gh
@@ -51,15 +51,14 @@ jobs:
       - name: Determine version tag
         id: version
         run: |
-          UPSTREAM_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          TAG="${UPSTREAM_TAG}-fork.$(date +%Y%m%d)"
+          TAG=$(git describe --tags 2>/dev/null || echo "v0.0.0-unknown")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "Fork release ${{ steps.version.outputs.tag }}"
+          name: ${{ steps.version.outputs.tag }}
           files: |
             bin/gh-linux-amd64
             bin/gh-darwin-arm64
