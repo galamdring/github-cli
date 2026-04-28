@@ -1,0 +1,64 @@
+name: Rebase on upstream and release
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebase-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream and rebase
+        run: |
+          git remote add upstream https://github.com/cli/cli.git
+          git fetch upstream trunk
+          git rebase upstream/trunk
+
+      - name: Push rebased branch
+        run: git push --force-with-lease origin HEAD
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build multi-platform
+        run: |
+          GOOS=linux GOARCH=amd64 go run script/build.go -o bin/gh-linux-amd64
+          GOOS=darwin GOARCH=arm64 go run script/build.go -o bin/gh-darwin-arm64
+          GOOS=darwin GOARCH=amd64 go run script/build.go -o bin/gh-darwin-amd64
+          GOOS=windows GOARCH=amd64 go run script/build.go -o bin/gh-windows-amd64.exe
+
+      - name: Determine version tag
+        id: version
+        run: |
+          UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/trunk 2>/dev/null || echo "v0.0.0")
+          TAG="${UPSTREAM_TAG}-fork.$(date +%Y%m%d)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Fork release ${{ steps.version.outputs.tag }}"
+          files: |
+            bin/gh-linux-amd64
+            bin/gh-darwin-arm64
+            bin/gh-darwin-amd64
+            bin/gh-windows-amd64.exe
+          generate_release_notes: true
