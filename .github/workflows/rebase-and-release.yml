@@ -30,7 +30,9 @@ jobs:
           git rebase upstream/trunk
 
       - name: Push rebased branch
-        run: git push --force-with-lease origin HEAD
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/galamdring/github-cli.git
+          git push --force-with-lease origin HEAD
 
       - name: Set up Go
         uses: actions/setup-go@v5
