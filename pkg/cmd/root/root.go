@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/MakeNowJust/heredoc"
+	"github.com/cli/cli/v2/internal/gh"
 	"github.com/cli/cli/v2/internal/gh/ghtelemetry"
 	accessibilityCmd "github.com/cli/cli/v2/pkg/cmd/accessibility"
 	actionsCmd "github.com/cli/cli/v2/pkg/cmd/actions"
@@ -68,6 +69,8 @@ func NewCmdRoot(f *cmdutil.Factory, telemetry ghtelemetry.CommandRecorder, versi
 		return nil, fmt.Errorf("failed to read configuration: %s\n", err)
 	}
 
+	var accountFlag string
+
 	cmd := &cobra.Command{
 		Use:   "gh <command> <subcommand> [flags]",
 		Short: "GitHub CLI",
@@ -92,6 +95,13 @@ func NewCmdRoot(f *cmdutil.Factory, telemetry ghtelemetry.CommandRecorder, versi
 				return &AuthError{}
 			}
 
+			if accountFlag != "" {
+				if err := applyAccountFlag(cfg, accountFlag); err != nil {
+					return err
+				}
+			}
+
+
 			return nil
 		},
 	}
@@ -100,6 +110,7 @@ func NewCmdRoot(f *cmdutil.Factory, telemetry ghtelemetry.CommandRecorder, versi
 	// cmd.SetErr(f.IOStreams.ErrOut) // just let it default to os.Stderr instead
 
 	cmd.PersistentFlags().Bool("help", false, "Show help for command")
+	cmd.PersistentFlags().StringVar(&accountFlag, "account", "", "Select a specific authenticated account for this command")
 
 	// override Cobra's default behaviors unless an opt-out has been set
 	if os.Getenv("GH_COBRA") == "" {
@@ -260,4 +271,32 @@ func NewCmdRoot(f *cmdutil.Factory, telemetry ghtelemetry.CommandRecorder, versi
 	referenceCmd.Long = stringifyReference(cmd)
 	referenceCmd.SetHelpFunc(longPager(f.IOStreams))
 	return cmd, nil
+}
+
+// applyAccountFlag validates the given account name against the authenticated users for
+// the default host and, if found, overrides the active token for the duration of the
+// command so that all API calls run as that account.
+//
+// An error is returned when the account is not currently authenticated, with a message
+// directing the user to `gh auth login`.
+func applyAccountFlag(cfg gh.Config, account string) error {
+	authCfg := cfg.Authentication()
+	hostname, _ := authCfg.DefaultHost()
+
+	users := authCfg.UsersForHost(hostname)
+	for _, u := range users {
+		if u == account {
+			token, source, err := authCfg.TokenForUser(hostname, account)
+			if err != nil {
+				return fmt.Errorf("account %q is not authenticated: %w", account, err)
+			}
+			authCfg.SetActiveToken(token, source)
+			return nil
+		}
+	}
+
+	return fmt.Errorf(
+		"account %q is not authenticated with %s\n\nTo add this account, run: gh auth login --hostname %s",
+		account, hostname, hostname,
+	)
 }
