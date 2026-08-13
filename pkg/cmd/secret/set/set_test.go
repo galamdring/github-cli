@@ -213,6 +213,29 @@ func TestNewCmdSet(t *testing.T) {
 				Application:     "Codespaces",
 			},
 		},
+		{
+			name: "Agents org",
+			args: `random_secret --org coolOrg --body "random value" --visibility selected --repos "coolRepo,cli/cli" --app Agents`,
+			wants: SetOptions{
+				SecretName:      "random_secret",
+				Visibility:      shared.Selected,
+				RepositoryNames: []string{"coolRepo", "cli/cli"},
+				Body:            "random value",
+				OrgName:         "coolOrg",
+				Application:     "Agents",
+			},
+		},
+		{
+			name: "Agents repo",
+			args: `cool_secret --body "a secret" --app Agents`,
+			wants: SetOptions{
+				SecretName:  "cool_secret",
+				Visibility:  shared.Private,
+				Body:        "a secret",
+				OrgName:     "",
+				Application: "Agents",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -408,6 +431,13 @@ func Test_setRun_repo(t *testing.T) {
 			wantApp: "actions",
 		},
 		{
+			name: "Agents",
+			opts: &SetOptions{
+				Application: "agents",
+			},
+			wantApp: "agents",
+		},
+		{
 			name: "Dependabot",
 			opts: &SetOptions{
 				Application: "dependabot",
@@ -439,7 +469,7 @@ func Test_setRun_repo(t *testing.T) {
 				HttpClient: func() (*http.Client, error) {
 					return &http.Client{Transport: reg}, nil
 				},
-				Config: func() (gh.Config, error) { return config.NewBlankConfig(), nil },
+				Config: func() (gh.Config, error) { return config.NewMockConfig(), nil },
 				BaseRepo: func() (ghrepo.Interface, error) {
 					return ghrepo.FromFullName("owner/repo")
 				},
@@ -480,7 +510,7 @@ func Test_setRun_env(t *testing.T) {
 		HttpClient: func() (*http.Client, error) {
 			return &http.Client{Transport: reg}, nil
 		},
-		Config: func() (gh.Config, error) { return config.NewBlankConfig(), nil },
+		Config: func() (gh.Config, error) { return config.NewMockConfig(), nil },
 		BaseRepo: func() (ghrepo.Interface, error) {
 			return ghrepo.FromFullName("owner/repo")
 		},
@@ -573,6 +603,37 @@ func Test_setRun_org(t *testing.T) {
 			wantRepositories: []int64{},
 			wantApp:          "dependabot",
 		},
+		{
+			name: "Agents",
+			opts: &SetOptions{
+				OrgName:     "UmbrellaCorporation",
+				Visibility:  shared.All,
+				Application: shared.Agents,
+			},
+			wantApp: "agents",
+		},
+		{
+			name: "Agents selected visibility",
+			opts: &SetOptions{
+				OrgName:         "UmbrellaCorporation",
+				Visibility:      shared.Selected,
+				Application:     shared.Agents,
+				RepositoryNames: []string{"birkin", "UmbrellaCorporation/wesker"},
+			},
+			wantRepositories: []int64{1, 2},
+			wantApp:          "agents",
+		},
+		{
+			name: "Agents no repos visibility",
+			opts: &SetOptions{
+				OrgName:         "UmbrellaCorporation",
+				Visibility:      shared.Selected,
+				Application:     shared.Agents,
+				RepositoryNames: []string{},
+			},
+			wantRepositories: []int64{},
+			wantApp:          "agents",
+		},
 	}
 
 	for _, tt := range tests {
@@ -603,7 +664,7 @@ func Test_setRun_org(t *testing.T) {
 				return &http.Client{Transport: reg}, nil
 			}
 			tt.opts.Config = func() (gh.Config, error) {
-				return config.NewBlankConfig(), nil
+				return config.NewMockConfig(), nil
 			}
 			tt.opts.IO = ios
 			tt.opts.SecretName = "cool_secret"
@@ -685,7 +746,7 @@ func Test_setRun_user(t *testing.T) {
 				return &http.Client{Transport: reg}, nil
 			}
 			tt.opts.Config = func() (gh.Config, error) {
-				return config.NewBlankConfig(), nil
+				return config.NewMockConfig(), nil
 			}
 			tt.opts.IO = ios
 			tt.opts.SecretName = "cool_secret"
@@ -723,7 +784,7 @@ func Test_setRun_shouldNotStore(t *testing.T) {
 			return &http.Client{Transport: reg}, nil
 		},
 		Config: func() (gh.Config, error) {
-			return config.NewBlankConfig(), nil
+			return config.NewMockConfig(), nil
 		},
 		BaseRepo: func() (ghrepo.Interface, error) {
 			return ghrepo.FromFullName("owner/repo")

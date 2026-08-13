@@ -57,6 +57,8 @@ type Config interface {
 	PreferEditorPrompt(hostname string) ConfigEntry
 	// Spinner returns the configured spinner setting, optionally scoped by host.
 	Spinner(hostname string) ConfigEntry
+	// Telemetry returns the configured telemetry setting, ignoring host scoping since telemetry is a global setting.
+	Telemetry() ConfigEntry
 
 	// Aliases provides persistent storage and modification of command aliases.
 	Aliases() AliasConfig
@@ -125,6 +127,18 @@ type AuthConfig interface {
 	//
 	// This will not be accurate if the oauth token is set from an environment variable.
 	ActiveUser(hostname string) (username string, err error)
+
+	// UserForOwner retrieves the gh username mapped to the given GitHub owner (user or org)
+	// for the given hostname. Returns an error if no mapping exists.
+	UserForOwner(hostname, owner string) (username string, err error)
+
+	// SetOwnerUser stores a mapping from a GitHub owner (user or org) to a gh username
+	// for the given hostname, persisting it to the config file.
+	SetOwnerUser(hostname, owner, username string) error
+
+	// SetRepoOwner sets the GitHub owner (user or org) of the current repo context
+	// so that ActiveToken prefers the mapped user's token over the globally active user.
+	SetRepoOwner(owner string)
 
 	// Hosts retrieves a list of known hosts.
 	Hosts() []string

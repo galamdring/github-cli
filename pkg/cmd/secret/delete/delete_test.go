@@ -89,6 +89,23 @@ func TestNewCmdDelete(t *testing.T) {
 				Application: "Codespaces",
 			},
 		},
+		{
+			name: "Agents org",
+			cli:  "cool --app agents --org UmbrellaCorporation",
+			wants: DeleteOptions{
+				SecretName:  "cool",
+				OrgName:     "UmbrellaCorporation",
+				Application: "Agents",
+			},
+		},
+		{
+			name: "Agents repo",
+			cli:  "cool --app Agents",
+			wants: DeleteOptions{
+				SecretName:  "cool",
+				Application: "Agents",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -312,6 +329,17 @@ func Test_removeRun_repo(t *testing.T) {
 			},
 		},
 		{
+			name: "Agents",
+			opts: &DeleteOptions{
+				Application: "agents",
+				SecretName:  "cool_agents_secret",
+			},
+			host: "github.com",
+			httpStubs: func(reg *httpmock.Registry) {
+				reg.Register(httpmock.WithHost(httpmock.REST("DELETE", "repos/owner/repo/agents/secrets/cool_agents_secret"), "api.github.com"), httpmock.StatusStringResponse(204, "No Content"))
+			},
+		},
+		{
 			name: "defaults to Actions",
 			opts: &DeleteOptions{
 				SecretName: "cool_secret",
@@ -335,7 +363,7 @@ func Test_removeRun_repo(t *testing.T) {
 			return &http.Client{Transport: reg}, nil
 		}
 		tt.opts.Config = func() (gh.Config, error) {
-			return config.NewBlankConfig(), nil
+			return config.NewMockConfig(), nil
 		}
 		tt.opts.BaseRepo = func() (ghrepo.Interface, error) {
 			return ghrepo.FromFullNameWithHost("owner/repo", tt.host)
@@ -396,7 +424,7 @@ func Test_removeRun_env(t *testing.T) {
 			return &http.Client{Transport: reg}, nil
 		}
 		tt.opts.Config = func() (gh.Config, error) {
-			return config.NewBlankConfig(), nil
+			return config.NewMockConfig(), nil
 		}
 
 		err := removeRun(tt.opts)
@@ -433,6 +461,14 @@ func Test_removeRun_org(t *testing.T) {
 			},
 			wantPath: "orgs/UmbrellaCorporation/codespaces/secrets/tVirus",
 		},
+		{
+			name: "Agents org",
+			opts: &DeleteOptions{
+				Application: "agents",
+				OrgName:     "UmbrellaCorporation",
+			},
+			wantPath: "orgs/UmbrellaCorporation/agents/secrets/tVirus",
+		},
 	}
 
 	for _, tt := range tests {
@@ -446,7 +482,7 @@ func Test_removeRun_org(t *testing.T) {
 			ios, _, _, _ := iostreams.Test()
 
 			tt.opts.Config = func() (gh.Config, error) {
-				return config.NewBlankConfig(), nil
+				return config.NewMockConfig(), nil
 			}
 			tt.opts.BaseRepo = func() (ghrepo.Interface, error) {
 				return ghrepo.FromFullName("owner/repo")
@@ -480,7 +516,7 @@ func Test_removeRun_user(t *testing.T) {
 			return &http.Client{Transport: reg}, nil
 		},
 		Config: func() (gh.Config, error) {
-			return config.NewBlankConfig(), nil
+			return config.NewMockConfig(), nil
 		},
 		SecretName:  "cool_secret",
 		UserSecrets: true,

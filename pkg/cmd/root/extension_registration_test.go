@@ -6,6 +6,7 @@ import (
 	"github.com/cli/cli/v2/internal/browser"
 	"github.com/cli/cli/v2/internal/config"
 	"github.com/cli/cli/v2/internal/gh"
+	"github.com/cli/cli/v2/internal/telemetry"
 	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/cli/cli/v2/pkg/extensions"
 	"github.com/cli/cli/v2/pkg/iostreams"
@@ -56,6 +57,9 @@ func TestNewCmdRoot_ExtensionRegistration(t *testing.T) {
 					NameFunc: func() string {
 						return extName
 					},
+					OwnerFunc: func() string {
+						return ""
+					},
 				})
 			}
 
@@ -68,13 +72,13 @@ func TestNewCmdRoot_ExtensionRegistration(t *testing.T) {
 			f := &cmdutil.Factory{
 				IOStreams: ios,
 				Config: func() (gh.Config, error) {
-					return config.NewBlankConfig(), nil
+					return config.NewMockConfig(), nil
 				},
 				Browser:          &browser.Stub{},
 				ExtensionManager: em,
 			}
 
-			cmd, err := NewCmdRoot(f, "", "")
+			cmd, err := NewCmdRoot(f, &telemetry.NoOpService{}, "", "")
 			require.NoError(t, err)
 
 			// Verify skipped extensions (should find core command registered, not extension)

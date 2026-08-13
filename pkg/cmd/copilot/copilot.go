@@ -18,10 +18,12 @@ import (
 	"strings"
 
 	"github.com/MakeNowJust/heredoc"
+	"github.com/cli/cli/v2/internal/ci"
 	"github.com/cli/cli/v2/internal/config"
+	"github.com/cli/cli/v2/internal/gh/ghtelemetry"
 	"github.com/cli/cli/v2/internal/prompter"
 	"github.com/cli/cli/v2/internal/safepaths"
-	"github.com/cli/cli/v2/internal/update"
+	"github.com/cli/cli/v2/internal/safeurl"
 	ghzip "github.com/cli/cli/v2/internal/zip"
 	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/cli/cli/v2/pkg/iostreams"
@@ -37,7 +39,7 @@ type CopilotOptions struct {
 	Remove      bool
 }
 
-func NewCmdCopilot(f *cmdutil.Factory, runF func(*CopilotOptions) error) *cobra.Command {
+func NewCmdCopilot(f *cmdutil.Factory, telemetry ghtelemetry.CommandRecorder, runF func(*CopilotOptions) error) *cobra.Command {
 	opts := &CopilotOptions{
 		IO:         f.IOStreams,
 		HttpClient: f.HttpClient,
@@ -80,6 +82,8 @@ func NewCmdCopilot(f *cmdutil.Factory, runF func(*CopilotOptions) error) *cobra.
 		`),
 		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			telemetry.SetSampleRate(ghtelemetry.SAMPLE_ALL)
+
 			stopParsePos := -1
 			for i, arg := range args {
 				if arg == "--" {
@@ -139,8 +143,9 @@ func runCopilot(opts *CopilotOptions) error {
 		return nil
 	}
 
-	copilotPath := findCopilotBinary()
-	if copilotPath == "" {
+	copilotPath := findCopilotBinaryFunc()
+	foundInPath := copilotPath != ""
+	if !foundInPath {
 		if opts.IO.CanPrompt() {
 			confirmed, err := opts.Prompter.Confirm("GitHub Copilot CLI is not installed. Would you like to install it?", true)
 			if err != nil {
@@ -150,7 +155,7 @@ func runCopilot(opts *CopilotOptions) error {
 				fmt.Fprintf(opts.IO.ErrOut, "%s Copilot CLI was not installed", opts.IO.ColorScheme().WarningIcon())
 				return cmdutil.SilentError
 			}
-		} else if !update.IsCI() {
+		} else if !ci.IsCI() {
 			fmt.Fprintf(opts.IO.ErrOut, "%s Copilot CLI not installed", opts.IO.ColorScheme().WarningIcon())
 			return cmdutil.SilentError
 		}
@@ -172,11 +177,17 @@ func runCopilot(opts *CopilotOptions) error {
 	externalCmd.Stderr = opts.IO.ErrOut
 	externalCmd.Env = append(os.Environ(), "COPILOT_GH=true")
 
-	if err := externalCmd.Run(); err != nil {
+	if err := runExternalCmdFunc(externalCmd); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			// We terminate with os.Exit here, preserving the exit code from Copilot CLI,
 			// and also preventing stdio writes by callers up the stack.
 			os.Exit(exitErr.ExitCode())
+		}
+		if foundInPath {
+			// We found a `copilot` binary but exec failed, possibly due to
+			// unusual characters in the path (see https://github.com/cli/cli/issues/13106).
+			// Suggest running copilot directly as a workaround.
+			return fmt.Errorf("%w\nFailed to run '%s', try running `copilot` directly without `gh`.", err, copilotPath)
 		}
 		return err
 	}
@@ -196,6 +207,14 @@ func copilotBinaryPath() string {
 	}
 	return filepath.Join(copilotInstallDir(), binaryName)
 }
+
+var runExternalCmdFunc = runExternalCmd
+
+func runExternalCmd(cmd *exec.Cmd) error {
+	return cmd.Run()
+}
+
+var findCopilotBinaryFunc = findCopilotBinary
 
 // findCopilotBinary returns the path to the Copilot CLI binary, if installed,
 // with the following order of precedence:
@@ -232,32 +251,37 @@ func downloadCopilot(httpClient *http.Client, ios *iostreams.IOStreams, installD
 		return "", fmt.Errorf("unsupported architecture: %s (supported: x64, arm64)", arch)
 	}
 
-	var archiveURL string
 	var archiveName string
 	var isZip bool
 	switch platform {
 	case "win32":
 		archiveName = fmt.Sprintf("copilot-%s-%s.zip", platform, arch)
-		archiveURL = fmt.Sprintf("https://github.com/github/copilot-cli/releases/latest/download/%s", archiveName)
 		isZip = true
 	case "linux", "darwin":
 		archiveName = fmt.Sprintf("copilot-%s-%s.tar.gz", platform, arch)
-		archiveURL = fmt.Sprintf("https://github.com/github/copilot-cli/releases/latest/download/%s", archiveName)
 	default:
 		return "", fmt.Errorf("unsupported platform: %s (supported: linux, darwin, windows)", platform)
 	}
 
-	checksumsURL := "https://github.com/github/copilot-cli/releases/latest/download/SHA256SUMS.txt"
+	archiveURL, err := safeurl.JoinPathWithHostPrefix("https://github.com/", "github", "copilot-cli", "releases", "latest", "download", archiveName)
+	if err != nil {
+		return "", err
+	}
+
+	checksumsURL, err := safeurl.JoinPathWithHostPrefix("https://github.com/", "github", "copilot-cli", "releases", "latest", "download", "SHA256SUMS.txt")
+	if err != nil {
+		return "", err
+	}
 
 	expectedChecksum, err := fetchExpectedChecksum(httpClient, checksumsURL, archiveName)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch checksums: %w", err)
 	}
 
-	ios.StartProgressIndicatorWithLabel(fmt.Sprintf("Downloading Copilot CLI from %s", archiveURL))
+	ios.StartProgressIndicatorWithLabel(fmt.Sprintf("Downloading Copilot CLI from %s", archiveURL.String()))
 	defer ios.StopProgressIndicator()
 
-	resp, err := httpClient.Get(archiveURL)
+	resp, err := httpClient.Get(archiveURL.String())
 	if err != nil {
 		return "", fmt.Errorf("failed to download: %w", err)
 	}
@@ -315,8 +339,8 @@ func downloadCopilot(httpClient *http.Client, ios *iostreams.IOStreams, installD
 }
 
 // fetchExpectedChecksum downloads the SHA256SUMS.txt file and returns the expected checksum for the given archive name.
-func fetchExpectedChecksum(httpClient *http.Client, checksumsURL, archiveName string) (string, error) {
-	resp, err := httpClient.Get(checksumsURL)
+func fetchExpectedChecksum(httpClient *http.Client, checksumsURL safeurl.SafeURL, archiveName string) (string, error) {
+	resp, err := httpClient.Get(checksumsURL.String())
 	if err != nil {
 		return "", err
 	}

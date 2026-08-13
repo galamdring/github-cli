@@ -31,8 +31,10 @@ const (
 	promptKey             = "prompt"
 	preferEditorPromptKey = "prefer_editor_prompt"
 	spinnerKey            = "spinner"
+	telemetryKey          = "telemetry"
 	userKey               = "user"
 	usersKey              = "users"
+	ownersKey             = "owners"
 	versionKey            = "version"
 )
 
@@ -169,6 +171,11 @@ func (c *cfg) Spinner(hostname string) gh.ConfigEntry {
 	return c.GetOrDefault(hostname, spinnerKey).Unwrap()
 }
 
+func (c *cfg) Telemetry() gh.ConfigEntry {
+	// Intentionally panic if there is no user provided value or default value (which would be a programmer error)
+	return c.GetOrDefault("", telemetryKey).Unwrap()
+}
+
 func (c *cfg) Version() o.Option[string] {
 	return c.get("", versionKey)
 }
@@ -223,11 +230,16 @@ type AuthConfig struct {
 	defaultHostOverride func() (string, string)
 	hostsOverride       func() []string
 	tokenOverride       func(string) (string, string)
+	repoOwner           string
 }
 
 // ActiveToken will retrieve the active auth token for the given hostname,
 // searching environment variables, plain text config, and
 // lastly encrypted storage.
+//
+// If a repo owner has been set via SetRepoOwner and a mapping exists for that
+// owner, the token for the mapped user will be used instead of the globally
+// active user.
 func (c *AuthConfig) ActiveToken(hostname string) (string, string) {
 	if c.tokenOverride != nil {
 		return c.tokenOverride(hostname)
@@ -236,7 +248,15 @@ func (c *AuthConfig) ActiveToken(hostname string) (string, string) {
 	if token == "" {
 		var user string
 		var err error
-		if user, err = c.ActiveUser(hostname); err == nil {
+		// If a repo owner is set and maps to a specific user, use that user's token.
+		if c.repoOwner != "" {
+			user, err = c.UserForOwner(hostname, c.repoOwner)
+		}
+		// Fall back to the globally active user if no owner mapping exists.
+		if err != nil || user == "" {
+			user, err = c.ActiveUser(hostname)
+		}
+		if err == nil {
 			token, err = c.TokenFromKeyringForUser(hostname, user)
 		}
 		if err != nil {
@@ -251,6 +271,13 @@ func (c *AuthConfig) ActiveToken(hostname string) (string, string) {
 		}
 	}
 	return token, source
+}
+
+// SetRepoOwner sets the GitHub owner (user or org) of the current repo context.
+// When set, ActiveToken will prefer the token for the user mapped to this owner
+// over the globally active user.
+func (c *AuthConfig) SetRepoOwner(owner string) {
+	c.repoOwner = owner
 }
 
 // HasActiveToken returns true when a token for the hostname is present.
@@ -312,6 +339,19 @@ func (c *AuthConfig) TokenFromKeyringForUser(hostname, username string) (string,
 // This will not be accurate if the oauth token is set from an environment variable.
 func (c *AuthConfig) ActiveUser(hostname string) (string, error) {
 	return c.cfg.Get([]string{hostsKey, hostname, userKey})
+}
+
+// UserForOwner retrieves the gh username mapped to the given GitHub owner (user or org)
+// for the given hostname. Returns an error if no mapping exists.
+func (c *AuthConfig) UserForOwner(hostname, owner string) (string, error) {
+	return c.cfg.Get([]string{hostsKey, hostname, ownersKey, owner})
+}
+
+// SetOwnerUser stores a mapping from a GitHub owner (user or org) to a gh username
+// for the given hostname, persisting it to the config file.
+func (c *AuthConfig) SetOwnerUser(hostname, owner, username string) error {
+	c.cfg.Set([]string{hostsKey, hostname, ownersKey, owner}, username)
+	return ghConfig.Write(c.cfg)
 }
 
 func (c *AuthConfig) Hosts() []string {
@@ -574,7 +614,7 @@ color_labels: disabled
 accessible_colors: disabled
 # Whether an accessible prompter should be used. Supported values: enabled, disabled
 accessible_prompter: disabled
-# Whether to use a animated spinner as a progress indicator. If disabled, a textual progress indicator is used instead. Supported values: enabled, disabled
+# Whether to use an animated spinner as a progress indicator. If disabled, a textual progress indicator is used instead. Supported values: enabled, disabled
 spinner: enabled
 `
 
@@ -675,11 +715,20 @@ var Options = []ConfigOption{
 	},
 	{
 		Key:           spinnerKey,
-		Description:   "whether to use a animated spinner as a progress indicator",
+		Description:   "whether to use an animated spinner as a progress indicator",
 		DefaultValue:  "enabled",
 		AllowedValues: []string{"enabled", "disabled"},
 		CurrentValue: func(c gh.Config, hostname string) string {
 			return c.Spinner(hostname).Value
+		},
+	},
+	{
+		Key:           telemetryKey,
+		Description:   "whether telemetry is enabled, disabled, or logging",
+		DefaultValue:  "enabled",
+		AllowedValues: []string{"enabled", "disabled", "log"},
+		CurrentValue: func(c gh.Config, hostname string) string {
+			return c.Telemetry().Value
 		},
 	},
 }
