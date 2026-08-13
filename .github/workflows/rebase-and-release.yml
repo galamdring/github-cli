@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   rebase-and-release:
@@ -24,10 +25,49 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream and rebase
+        id: rebase
         run: |
           git remote add upstream https://github.com/cli/cli.git
           git fetch upstream trunk --tags
-          git rebase upstream/trunk
+
+          if git rebase upstream/trunk 2>rebase_error.log; then
+            exit 0
+          fi
+
+          echo "conflict=true" >> "$GITHUB_OUTPUT"
+          cat rebase_error.log
+
+          {
+            echo "The scheduled rebase of \`$(git branch --show-current)\` onto \`upstream/trunk\` failed and needs manual resolution."
+            echo
+            echo "**Conflicting files:**"
+            echo '```'
+            git diff --name-only --diff-filter=U
+            echo '```'
+            echo
+            echo "**Git output:**"
+            echo '```'
+            tail -n 60 rebase_error.log
+            echo '```'
+            echo
+            echo "To resolve: fetch \`upstream/trunk\`, run \`git rebase upstream/trunk\`, fix the conflicts above, then force-push."
+          } > rebase_conflict_body.md
+
+          git rebase --abort
+          exit 1
+
+      - name: Report rebase conflict
+        if: failure() && steps.rebase.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Automated rebase onto upstream/trunk is failing"
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --search "\"$TITLE\" in:title" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body-file rebase_conflict_body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file rebase_conflict_body.md
+          fi
 
       - name: Push rebased branch
         run: |
