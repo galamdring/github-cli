@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	ghContext "github.com/cli/cli/v2/context"
 	"github.com/cli/cli/v2/git"
 	"github.com/cli/cli/v2/internal/config"
 	"github.com/cli/cli/v2/internal/gh"
@@ -353,7 +354,8 @@ func TestSSOURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.NewMockConfig()
 			ios, _, _, stderr := iostreams.Test()
-			client, err := HttpClientFunc(func() (gh.Config, error) { return cfg, nil }, ios, "v1.2.3", "", &telemetry.NoOpService{})()
+			remotesFunc := func() (ghContext.Remotes, error) { return nil, nil }
+			client, err := HttpClientFunc(func() (gh.Config, error) { return cfg, nil }, ios, "v1.2.3", "", &telemetry.NoOpService{}, remotesFunc)()
 			require.NoError(t, err)
 			req, err := http.NewRequest("GET", ts.URL, nil)
 			if tt.sso != "" {
