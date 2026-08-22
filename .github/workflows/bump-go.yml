@@ -20,6 +20,11 @@ jobs:
 
       - name: Bump Go version
         env:
+          # actions/setup-go pins GOTOOLCHAIN=local after installing the version
+          # from the pre-bump go.mod, which blocks `go mod tidy` from fetching the
+          # newer toolchain this script writes into go.mod later in the same job.
+          # Restore Go's default auto-download behavior for this step only.
+          GOTOOLCHAIN: auto
           GIT_COMMITTER_NAME: cli automation
           GIT_AUTHOR_NAME: cli automation
           GIT_COMMITTER_EMAIL: noreply@github.com
